@@ -197,8 +197,22 @@ def save_lot_answer(message):
     answer = message.text
     telegram_id = message.chat.id
     question = new_lot[telegram_id]['next_question']
-    new_lot[telegram_id][question] = answer
-    ask_next_lot_question(telegram_id)
+    # Валидация различных полей
+    if question == 'start_price' and not valid_float(answer):
+        bot.send_message(message.chat.id, "Введите числовое значение для начальной цены:")
+        bot.register_next_step_handler(message, save_lot_answer)
+    elif question in ['start_time', 'end_time']:  # проверка времени начала и конца
+        try:
+            datetime.strptime(answer, '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            bot.send_message(message.chat.id, "Время должно быть в формате 'YYYY-MM-DD HH:MM:SS':")
+            bot.register_next_step_handler(message, save_lot_answer)
+        else:
+            new_lot[telegram_id][question] = answer
+            ask_next_lot_question(telegram_id)
+    else:  # в других случаях, сохранить ответ без какой-либо обработки
+        new_lot[telegram_id][question] = answer
+        ask_next_lot_question(telegram_id)
 
 def add_lot(login, start_price, seller_link, geolocation, description, start_time, end_time):  # Сохранение нового лота в БД
     with con:
@@ -357,6 +371,15 @@ Thread(target=run_pending_jobs).start()
 
 ###############################################
 
+####### Valid ################################
+def valid_float(input_string):
+    try:
+        float(input_string)
+        return True
+    except ValueError:
+        return False
+##############################################
+
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
     flag = call.data[0]  # Берем первый символ из callback_data
@@ -462,7 +485,7 @@ def callback_query(call):
             else:
                 bot.send_message(call.message.chat.id, 'В буферной таблице пока нет лотов')
     elif call.data == 'редактироание':
-                with con:  
+                with con:
                     # получение списка администраторов
                     admins = [
                         (id, login)
